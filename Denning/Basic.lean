@@ -4,6 +4,7 @@ import Mathlib.Order.Bounds.Defs
 import Mathlib.Order.Lattice
 import Mathlib.Data.Finset.Fold
 import Mathlib.Data.Fintype.Basic
+import Mathlib.Data.Finset.Insert
 
 class InformationFlowModel (N P SC: Type) extends AddCommSemigroup SC, LE SC where
   class_of_obj : N → SC
@@ -24,7 +25,8 @@ class ProperInformationFlowModel (N P SC : Type) extends
   where
   bot : SC
   is_least : IsLeast Set.univ bot
-  is_decidable : DecidableRel le
+  is_decidable_rel : DecidableRel le
+  is_decidable_eq : DecidableEq SC
   plus_lt_l: ∀x y : SC, x ≤ x + y
   plus_lt_r: ∀x y : SC, y ≤ x + y
   plus_ub : ∀x y z : SC, x ≤ z ∧ y ≤ z → x + y ≤ z
@@ -36,11 +38,47 @@ instance [model : ProperInformationFlowModel N P SC] : Std.Associative (model.ad
   assoc := add_assoc
 
 instance [model : ProperInformationFlowModel N P SC] : DecidableRel (model.le) := 
-  model.is_decidable
+  model.is_decidable_rel
 
 def ProperInformationFlowModel.sum
   (model : ProperInformationFlowModel N P SC) 
-  (X : Finset SC) : SC := Finset.fold model.add model.bot id X
+  (X : Finset SC) 
+  : SC := Finset.fold model.add model.bot id X
+
+theorem ProperInformationFlowModel.sum.isUB 
+  (model : ProperInformationFlowModel N P SC) 
+  (X : Finset SC)
+  : x ∈ X → x ≤ model.sum X := by
+  intro hyp
+  have _ := model.is_decidable_eq
+  have not_in := Finset.not_mem_erase x X 
+  have decomp : X = (X.erase x).cons x not_in := by
+    apply Finset.ext_iff.mpr
+    intro a
+    constructor
+    case mp => cases model.is_decidable_eq x a; repeat aesop
+    case mpr => repeat aesop
+  rw [decomp]; unfold ProperInformationFlowModel.sum
+  rw [Finset.fold_cons]
+  apply model.plus_lt_l
+
+theorem ProperInformationFlowModel.sum.isMinimal
+  (model : ProperInformationFlowModel N P SC) 
+  (X : Finset SC)
+  : (∀x ∈ X, x ≤ y) →  model.sum X ≤ y := by
+  have _ := model.is_decidable_eq
+  apply @Finset.induction_on _ _ model.is_decidable_eq X
+  · unfold ProperInformationFlowModel.sum
+    simp
+    apply model.is_least.2
+    trivial
+  · intro a s not_in hyp₂
+    intro hyp
+    unfold ProperInformationFlowModel.sum
+    simp
+    aesop
+    apply model.plus_ub
+    aesop
 
 def ProperInformationFlowModel.joint_lbs 
   (model : ProperInformationFlowModel N P SC) 
